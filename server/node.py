@@ -3,8 +3,12 @@ import threading
 import time
 from typing import Dict, Tuple, List, Optional
 
-from distributed_game.game.game import GameWorld
-from distributed_game.server.Transport import Neighbor, Endpoint, Role, Transport, Message, MessageType
+try:
+    from game.game import GameWorld
+    from server.Transport import Neighbor, Endpoint, Role, Transport, Message, MessageType
+except ImportError:
+    from distributed_game.game.game import GameWorld
+    from distributed_game.server.Transport import Neighbor, Endpoint, Role, Transport, Message, MessageType
 
 
 class Membership:
@@ -127,7 +131,7 @@ class Node:
             self.highest_term_seen = 1
             self.current_server = self.endpoint
             self.membership.upsert(self.endpoint, Role.SERVER, bump_version=True)
-            self.world.ensure_player(self.endpoint.key())
+            self.world.set_builder_player(self.endpoint.key())
         elif server_info is not None:
             server_ep = Endpoint(*server_info)
             self.current_server = server_ep
@@ -139,8 +143,7 @@ class Node:
         self.running = True
         threading.Thread(target=self._recv_loop, daemon=True).start()
         threading.Thread(target=self._heartbeat_loop, daemon=True).start()
-        if self.role == Role.SERVER:
-            threading.Thread(target=self._server_tick_loop, daemon=True).start()
+        threading.Thread(target=self._server_tick_loop, daemon=True).start()
 
         print(f"[{self.role.value.upper()}] {self.endpoint.key()} started")
 
@@ -231,7 +234,7 @@ class Node:
                 self.membership.remove(old.endpoint)
 
             self.membership.upsert(self.endpoint, Role.SERVER, bump_version=True)
-            self.world.ensure_player(self.endpoint.key())
+            self.world.set_builder_player(self.endpoint.key())
             self.election_in_progress = False
             self._last_membership_version_sent = -1
 
@@ -267,11 +270,21 @@ class Node:
         if time.time() - self.last_server_heartbeat < self.timeout:
             return
 
-        print(f"[CLIENT] No heartbeat from {self.current_server.key()} for >{self.timeout}s → election")
+        stale_server = self.current_server
+        print(f"[CLIENT] No heartbeat from {stale_server.key()} for >{self.timeout}s -> election")
+        self.membership.remove(stale_server)
+        if self.current_server == stale_server:
+            self.current_server = None
         self._trigger_election()
 
     def _queue_input(self, sender: Endpoint, seq: int, input_data: dict):
-        self._incoming_inputs.setdefault(sender.key(), {})[seq] = input_data
+        self._incoming_inputs.setdefault(sender.key(), {})[seq] = self._sanitize_client_input(input_data)
+
+    def _sanitize_client_input(self, input_data: dict) -> dict:
+        sanitized = input_data.copy()
+        for key in ("place_platform", "remove_platform", "place_block", "remove_block"):
+            sanitized.pop(key, None)
+        return sanitized
 
     def _apply_queued_inputs(self):
         for player_key, seq_map in list(self._incoming_inputs.items()):
@@ -290,6 +303,8 @@ class Node:
                 msg = self.transport.recv()
                 self._handle(msg)
             except Exception as e:
+                if getattr(e, "winerror", None) == 10054:
+                    continue
                 if self.running:
                     print(f"[RECV ERROR] {e}")
 
@@ -426,6 +441,7 @@ class Node:
         self.term = new_term
         self.highest_term_seen = max(self.highest_term_seen, new_term)
         self.election_in_progress = False
+        self.world.clear_builder(self.endpoint.key())
         if new_server:
             self.current_server = new_server
 

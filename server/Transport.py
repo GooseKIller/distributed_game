@@ -80,6 +80,11 @@ class Message:
 class Transport:
     def __init__(self, ip: str, port: int):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        if hasattr(socket, "SIO_UDP_CONNRESET"):
+            try:
+                self.sock.ioctl(socket.SIO_UDP_CONNRESET, False)
+            except OSError:
+                pass
         self.sock.bind((ip, port))
 
     def send(self, ep: Endpoint, msg: Message):
