@@ -1,9 +1,22 @@
+# Distributed Platformer Prototype
 
-- `tkinter` draws placeholder shapes.
+Pure Python cooperative platformer prototype:
+
+- `tkinter` renders the game window and sprites.
 - UDP sockets synchronize players, host placement, and world state.
-- No sprites are included yet
+- Pixel-art assets are bundled in `assets/`.
 
 ## Run
+
+Double-click the packaged launcher:
+
+```text
+DistributedPlatformer.exe
+```
+
+At startup you get `Host` and `Launch` buttons on a dimmed background. Each mode pre-fills the default IPs and ports, but you can edit them before starting. If the local join port is already taken, the launcher shows a warning and stays open.
+
+Or run from Python:
 
 Start the host/builder:
 
@@ -43,4 +56,12 @@ Runner:
 
 ## Current Gameplay
 
-Runners spawn on the left and try to reach the fish on the right. The map already has placeholder spikes and enemies. Enemies patrol left and right. The host cooperates by placing flat platforms, jump pads, and stairs so runners can cross hazards. Placement counts are lifetime counts: deleting a platform does not refund that platform type.
+Runners spawn on the left and try to reach the reward on the right. The map uses sprite-based spikes and bee enemies. Enemies patrol left and right. The host cooperates by placing cloud platforms, balloon jump pads, and cloud stairs so runners can cross hazards. Placement counts are lifetime counts: deleting a platform does not refund that platform type. Each joined runner gets a different cat sprite.
+
+## Build EXE
+
+Rebuild the Windows executable with:
+
+```powershell
+.\build_exe.ps1
+```

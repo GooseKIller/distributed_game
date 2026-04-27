@@ -19,9 +19,14 @@ class GameWorld:
     WORLD_HEIGHT = 720
     FLOOR_Y = 650
 
-    PLAYER_W = 34
-    PLAYER_H = 46
+    PLAYER_W = 72
+    PLAYER_H = 30
     SPAWN_X = 48
+    PLAYER_AVATAR_COUNT = 5
+    SPIKE_W = 60
+    SPIKE_H = 24
+    ENEMY_W = 56
+    ENEMY_H = 38
 
     GRAVITY = 1750.0
     MOVE_SPEED = 285.0
@@ -53,9 +58,9 @@ class GameWorld:
         self.spikes: List[dict] = []
         self.goal = {
             "x": self.WORLD_WIDTH - 126,
-            "y": self.FLOOR_Y - 86,
-            "w": 70,
-            "h": 50,
+            "y": self.FLOOR_Y - 72,
+            "w": 84,
+            "h": 56,
         }
         self._platform_counter = 0
         self._platform_order: List[str] = []
@@ -68,24 +73,24 @@ class GameWorld:
     # ---------------------------------------------------------------------
     def _build_static_map(self):
         self.spikes = [
-            {"x": 360, "y": self.FLOOR_Y - 28, "w": 38, "h": 28},
-            {"x": 410, "y": self.FLOOR_Y - 28, "w": 38, "h": 28},
-            {"x": 700, "y": self.FLOOR_Y - 28, "w": 38, "h": 28},
-            {"x": 748, "y": self.FLOOR_Y - 28, "w": 38, "h": 28},
-            {"x": 796, "y": self.FLOOR_Y - 28, "w": 38, "h": 28},
-            {"x": 1260, "y": self.FLOOR_Y - 28, "w": 38, "h": 28},
-            {"x": 1310, "y": self.FLOOR_Y - 28, "w": 38, "h": 28},
-            {"x": 1875, "y": self.FLOOR_Y - 28, "w": 38, "h": 28},
-            {"x": 1925, "y": self.FLOOR_Y - 28, "w": 38, "h": 28},
-            {"x": 2200, "y": self.FLOOR_Y - 28, "w": 38, "h": 28},
+            {"x": 360, "y": self.FLOOR_Y - self.SPIKE_H, "w": self.SPIKE_W, "h": self.SPIKE_H},
+            {"x": 444, "y": self.FLOOR_Y - self.SPIKE_H, "w": self.SPIKE_W, "h": self.SPIKE_H},
+            {"x": 700, "y": self.FLOOR_Y - self.SPIKE_H, "w": self.SPIKE_W, "h": self.SPIKE_H},
+            {"x": 784, "y": self.FLOOR_Y - self.SPIKE_H, "w": self.SPIKE_W, "h": self.SPIKE_H},
+            {"x": 868, "y": self.FLOOR_Y - self.SPIKE_H, "w": self.SPIKE_W, "h": self.SPIKE_H},
+            {"x": 1260, "y": self.FLOOR_Y - self.SPIKE_H, "w": self.SPIKE_W, "h": self.SPIKE_H},
+            {"x": 1344, "y": self.FLOOR_Y - self.SPIKE_H, "w": self.SPIKE_W, "h": self.SPIKE_H},
+            {"x": 1875, "y": self.FLOOR_Y - self.SPIKE_H, "w": self.SPIKE_W, "h": self.SPIKE_H},
+            {"x": 1959, "y": self.FLOOR_Y - self.SPIKE_H, "w": self.SPIKE_W, "h": self.SPIKE_H},
+            {"x": 2200, "y": self.FLOOR_Y - self.SPIKE_H, "w": self.SPIKE_W, "h": self.SPIKE_H},
         ]
         self.enemies = {
             "enemy-1": {
                 "id": "enemy-1",
                 "x": 910.0,
-                "y": self.FLOOR_Y - 38,
-                "w": 42,
-                "h": 38,
+                "y": self.FLOOR_Y - self.ENEMY_H,
+                "w": self.ENEMY_W,
+                "h": self.ENEMY_H,
                 "min_x": 880.0,
                 "max_x": 1160.0,
                 "speed": 96.0,
@@ -94,9 +99,9 @@ class GameWorld:
             "enemy-2": {
                 "id": "enemy-2",
                 "x": 1510.0,
-                "y": self.FLOOR_Y - 42,
-                "w": 46,
-                "h": 42,
+                "y": self.FLOOR_Y - self.ENEMY_H,
+                "w": self.ENEMY_W,
+                "h": self.ENEMY_H,
                 "min_x": 1460.0,
                 "max_x": 1775.0,
                 "speed": 122.0,
@@ -105,9 +110,9 @@ class GameWorld:
             "enemy-3": {
                 "id": "enemy-3",
                 "x": 2240.0,
-                "y": self.FLOOR_Y - 36,
-                "w": 40,
-                "h": 36,
+                "y": self.FLOOR_Y - self.ENEMY_H,
+                "w": self.ENEMY_W,
+                "h": self.ENEMY_H,
                 "min_x": 2075.0,
                 "max_x": 2360.0,
                 "speed": 105.0,
@@ -118,6 +123,18 @@ class GameWorld:
     # ---------------------------------------------------------------------
     # Player helpers
     # ---------------------------------------------------------------------
+    def _pick_avatar_id(self, exclude_player: Optional[str] = None) -> int:
+        used = {
+            int(player.get("avatar_id", -1))
+            for key, player in self.players.items()
+            if key != exclude_player and not player.get("builder", False) and int(player.get("avatar_id", -1)) >= 0
+        }
+        for avatar_id in range(self.PLAYER_AVATAR_COUNT):
+            if avatar_id not in used:
+                return avatar_id
+        seed = sum(ord(char) for char in (exclude_player or ""))
+        return seed % self.PLAYER_AVATAR_COUNT
+
     def _new_player(self, builder: bool = False) -> dict:
         return {
             "x": float(self.SPAWN_X),
@@ -129,9 +146,20 @@ class GameWorld:
             "alive": True,
             "finished": False,
             "builder": bool(builder),
+            "avatar_id": -1 if builder else self._pick_avatar_id(),
+            "facing": 1,
             "respawn_timer": 0.0,
             "deaths": 0,
         }
+
+    def _ensure_avatar(self, player_key: str):
+        player = self.players[player_key]
+        if player.get("builder", False):
+            player["avatar_id"] = -1
+            return
+        if int(player.get("avatar_id", -1)) >= 0:
+            return
+        player["avatar_id"] = self._pick_avatar_id(exclude_player=player_key)
 
     def ensure_player(self, player_key: str, builder: bool = False):
         with self._lock:
@@ -139,6 +167,7 @@ class GameWorld:
                 self.players[player_key] = self._new_player(builder=builder)
             elif builder:
                 self.players[player_key]["builder"] = True
+            self._ensure_avatar(player_key)
             self.last_input_seq.setdefault(player_key, 0)
 
     def set_builder_player(self, player_key: str):
@@ -150,19 +179,30 @@ class GameWorld:
                     player["vx"] = 0.0
                     player["vy"] = 0.0
                     player["move_x"] = 0.0
+                    player["avatar_id"] = -1
+                else:
+                    self._ensure_avatar(key)
 
     def clear_builder(self, player_key: Optional[str] = None):
         with self._lock:
             for key, player in self.players.items():
                 if player_key is None or key == player_key:
                     player["builder"] = False
+                    self._ensure_avatar(key)
 
     def _reset_player(self, player: dict, keep_deaths: bool = True):
         deaths = int(player.get("deaths", 0)) if keep_deaths else 0
         builder = bool(player.get("builder", False))
+        avatar_id = int(player.get("avatar_id", -1))
+        facing = int(player.get("facing", 1))
         player.clear()
         player.update(self._new_player(builder=builder))
         player["deaths"] = deaths
+        player["facing"] = 1 if facing >= 0 else -1
+        if builder:
+            player["avatar_id"] = -1
+        elif avatar_id >= 0:
+            player["avatar_id"] = avatar_id
 
     def _kill_player(self, player: dict):
         if not player.get("alive", True) or player.get("builder", False):
@@ -361,6 +401,10 @@ class GameWorld:
             speed = float(inp.get("speed", self.MOVE_SPEED))
             player["move_x"] = move_x
             player["vx"] = move_x * speed
+            if move_x > 0:
+                player["facing"] = 1
+            elif move_x < 0:
+                player["facing"] = -1
 
             if bool(inp.get("jump", False)) and bool(player.get("on_ground", False)):
                 player["vy"] = -float(inp.get("jump_velocity", self.JUMP_SPEED))
@@ -568,6 +612,8 @@ class GameWorld:
             player[key] = float(value.get(key, player[key]))
         for key in ("on_ground", "alive", "finished", "builder"):
             player[key] = bool(value.get(key, player[key]))
+        player["avatar_id"] = int(value.get("avatar_id", player["avatar_id"]))
+        player["facing"] = 1 if int(value.get("facing", player["facing"])) >= 0 else -1
         player["deaths"] = int(value.get("deaths", player["deaths"]))
         return player
 
