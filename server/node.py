@@ -422,6 +422,16 @@ class Node:
 
     def _apply_authoritative_state(self, msg: Message):
         payload = msg.payload
+
+        server_hash = payload.get("hash")
+        server_tick = msg.tick
+
+        local_hash = self.world.state_hash()
+        local_tick = self.world.tick
+
+        if server_tick == local_tick and server_hash != local_hash:
+            print(f"[CLIENT] DESYNC tick={server_tick}")
+
         if payload.get("membership"):
             m = payload["membership"]
             self.membership.replace_from_snapshot(int(m.get("version", 0)), m.get("nodes", []))
